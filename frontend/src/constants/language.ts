@@ -24,7 +24,7 @@ export const CODE_SNIPPETS: CodeSnippets = {
 function greet(name) {
     console.log("Hello, " + name + "!");
 }
-greet("Alex");
+greet("Ritesh");
 `,
   typescript: `
 type Params = {
@@ -35,12 +35,12 @@ function greet(data: Params) {
     console.log("Hello, " + data.name + "!");
 }
 
-greet({ name: "Alex" });
+greet({ name: "Ritesh" });
 `,
   python: `
 def greet(name):
     print("Hello, " + name + "!")
-greet("Alex")
+greet("Ritesh")
 `,
   java: `
 public class HelloWorld {

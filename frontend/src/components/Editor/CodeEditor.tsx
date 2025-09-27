@@ -30,9 +30,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({ updatePageContent, darkMode, cu
     editorRef.current = editor;
     editor.focus();
   };
-
   
-
   return (
     <Editor
       key={currentPage.id} // ensures re-render when file changes

@@ -3,9 +3,6 @@ import { languages } from '../constants/language';
 import { connectedUsers } from '../constants/user';
 import { CODE_SNIPPETS } from '../constants/language';
 import {
-    Search,
-    Settings,
-    Plus,
     Trash2,
     User,
     Users,
@@ -13,9 +10,7 @@ import {
     Share,
     MoreHorizontal,
     ChevronDown,
-    FileText,
     Code,
-    Monitor,
     X,
     Sun,
     Moon,
@@ -47,10 +42,12 @@ function IDEApplication1() {
 
 
     const [currentPage, setCurrentPage] = useState<{
+        id:number;
         name: string;
         language: string;
         content: string;
     } | null>({
+        id:1,
         name: "main.js",
         language: "javascript",
         content: CODE_SNIPPETS['javascript'], // ✅ Default snippet
@@ -116,6 +113,7 @@ function IDEApplication1() {
         setShowLanguageDropdown(false);
 
         setCurrentPage({
+            id:1,
             name: `main.${langValue === "javascript" ? "js" :
                 langValue === "typescript" ? "ts" :
                     langValue === "python" ? "py" :

@@ -1,4 +1,6 @@
-import Ide from "./pages/Ide"
+
+
+import { Route, Routes } from "react-router-dom"
 import IDEApplication1 from "./pages/IDEPage"
 
 
@@ -6,8 +8,10 @@ function App() {
  
   return (
     <>
-      {/* <Ide /> */}
-      <IDEApplication1 />
+
+      <Routes>
+        <Route path="/" element={<IDEApplication1 />}/>
+      </Routes>
     </>
   )
 }
