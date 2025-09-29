@@ -2,6 +2,7 @@
 
 import { Route, Routes } from "react-router-dom"
 import IDEApplication1 from "./pages/IDEPage"
+import RegisterPage from "./pages/RegisterPage"
 
 
 function App() {
@@ -10,7 +11,9 @@ function App() {
     <>
 
       <Routes>
-        <Route path="/" element={<IDEApplication1 />}/>
+        {/* <Route path="/" element={<IDEApplication1 />}/> */}
+         <Route path="/room/:roomId" element={<IDEApplication1 />} />
+        <Route path="/" element={<RegisterPage/>}/>
       </Routes>
     </>
   )

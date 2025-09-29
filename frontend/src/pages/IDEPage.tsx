@@ -1,28 +1,15 @@
-import { useEffect, useState } from 'react';
-import { languages } from '../constants/language';
-import { connectedUsers } from '../constants/user';
-import { CODE_SNIPPETS } from '../constants/language';
+import { useEffect, useState } from "react";
+import { languages } from "../constants/language";
+import { connectedUsers } from "../constants/user";
+import { CODE_SNIPPETS } from "../constants/language";
 import {
-    Trash2,
-    User,
-    Users,
-    Play,
-    Share,
-    MoreHorizontal,
-    ChevronDown,
-    Code,
-    X,
-    Sun,
-    Moon,
-    Square
-} from 'lucide-react';
-import Editor from '../components/Editor/Editor';
-import { runTheCode } from '../healper/healper';
-
-
-
-
-
+    Trash2, User, Users, Play, Share, MoreHorizontal,
+    ChevronDown, Code, X, Sun, Moon, Square
+} from "lucide-react";
+import Editor from "../components/Editor/Editor";
+import { runTheCode } from "../healper/healper";
+import socket from "../healper/socket";
+import { useRoom } from "../context/RoomContext";
 
 function IDEApplication1() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -41,143 +28,160 @@ function IDEApplication1() {
     const [isRunning, setIsRunning] = useState(false);
 
 
+    const { roomId } = useRoom();
+
     const [currentPage, setCurrentPage] = useState<{
-        id:number;
+        id: number;
         name: string;
         language: string;
         content: string;
-    } | null>({
-        id:1,
+    }>({
+        id: 1,
         name: "main.js",
         language: "javascript",
-        content: CODE_SNIPPETS['javascript'], // ✅ Default snippet
+        content: CODE_SNIPPETS["javascript"],
     });
 
-
-
-    const runCode = async () => {
-    if (!currentPage) return;
-
-    setIsRunning(true);
-    setShowTerminal(true);
-
-    try {
-        const sourceCode = currentPage.content;
-        const lang = currentPage.language;
-
-        const res = await runTheCode(lang, sourceCode);
-
-        const out = res.output;
-        const err = res.stderr;
-
-        if (err) {
-            setTerminalOutput(err);                 // clear output
-            setTerminalErrors(`ERROR: ${err}`);   // set errors
-            setTerminalTab('errors');             // ✅ open errors tab
-            setTimeout(()=>{
-                setTerminalTab('output');             // ✅ open errors tab
-            }, 2000)
-            return;
+    // Helper → map language to filename
+    const getFileName = (lang: string) => {
+        switch (lang) {
+            case "javascript": return "main.js";
+            case "typescript": return "main.ts";
+            case "python": return "main.py";
+            case "java": return "main.java";
+            case "csharp": return "main.cs";
+            default: return "main.cpp";
         }
-
-        setTerminalOutput(`${out}`);
-        setTerminalErrors("No errors detected.");
-        setTerminalTab('output');                // open output tab
-    } catch (err: any) {
-        setTerminalOutput(`${err.message || err}`);
-        setTerminalErrors(`ERROR: ${err.message || err}`);
-        setTerminalTab('errors');                 // ✅ open errors tab on exception
-    } finally {
-        setIsRunning(false);
-    }
-};
-
-
-
-
-    const toggleTheme = () => {
-        setDarkMode(!darkMode);
     };
 
+    // Join room and sync last code
+    useEffect(() => {
+        if (!roomId) return;
 
-    const updatePageContent = (content: string) => {
-        if (!currentPage) return;
-        setCurrentPage({
-            ...currentPage,
-            content,
-        });
-    };
+        socket.emit("join-room", roomId);
 
+        const syncHandler = (data: { code: string }) => {
+            setCurrentPage((prev) => ({
+                ...prev,
+                content: data.code,
+            }));
+        };
+
+        socket.on("editor-sync", syncHandler);
+
+        return () => {
+            socket.off("editor-sync", syncHandler);
+        };
+    }, [roomId]);
+
+    // Listen for language changes
+    useEffect(() => {
+        const langHandler = (data: { language: string }) => {
+            const lang = data.language;
+            console.log("Language changed in room:", lang);
+
+            setSelectedLanguage(lang);
+            setCurrentPage((prev) => ({
+                ...prev,
+                language: lang,
+                name: getFileName(lang),
+                content: CODE_SNIPPETS[lang] || prev.content,
+            }));
+        };
+
+        socket.on("changing-language", langHandler);
+
+        return () => {
+            socket.off("changing-language", langHandler);
+        };
+    }, []);
+
+    // Handle local language change
     const handleLanguageChange = (langValue: string) => {
         setSelectedLanguage(langValue);
         setShowLanguageDropdown(false);
 
         setCurrentPage({
-            id:1,
-            name: `main.${langValue === "javascript" ? "js" :
-                langValue === "typescript" ? "ts" :
-                    langValue === "python" ? "py" :
-                        langValue === "java" ? "java" :
-                            langValue === "csharp" ? "cs" : "cpp"}`,
+            id: 1,
             language: langValue,
-            content: CODE_SNIPPETS[langValue] || "// Start coding here...",
+            name: getFileName(langValue),
+            content: CODE_SNIPPETS[langValue],
         });
+
+        if (roomId) {
+            socket.emit("change-lang", {
+                roomId,
+                language: langValue,
+            });
+        }
     };
-    useEffect(() => {
-        console.log("Curr edn ", currentPage);
 
-    }, [currentPage, setCurrentPage])
+    // Update code locally
+    const updatePageContent = (content: string) => {
+        setCurrentPage((prev) => ({
+            ...prev,
+            content,
+        }));
+    };
 
+    // Run code in terminal
+    const runCode = async () => {
+        if (!currentPage) return;
+
+        setIsRunning(true);
+        setShowTerminal(true);
+
+        try {
+            const res = await runTheCode(currentPage.language, currentPage.content);
+
+            if (res.stderr) {
+                setTerminalOutput(res.stderr);
+                setTerminalErrors(`ERROR: ${res.stderr}`);
+                setTerminalTab("errors");
+                setTimeout(() => setTerminalTab("output"), 2000);
+                return;
+            }
+
+            setTerminalOutput(res.output);
+            setTerminalErrors("No errors detected.");
+            setTerminalTab("output");
+        } catch (err: any) {
+            setTerminalOutput(`${err.message || err}`);
+            setTerminalErrors(`ERROR: ${err.message || err}`);
+            setTerminalTab("errors");
+        } finally {
+            setIsRunning(false);
+        }
+    };
+
+    const toggleTheme = () => setDarkMode(!darkMode);
 
     return (
-        <div
-            className={`flex h-screen ${darkMode ? "dark bg-gray-900" : "bg-gray-50"
-                }`}>
+        <div className={`flex h-screen ${darkMode ? "dark bg-gray-900" : "bg-gray-50"}`}>
             {/* Sidebar */}
-            <div className={`${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'} border-r transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-0'} overflow-hidden flex flex-col`}>
-                {/* Sidebar Header - Fixed */}
-                <div className={`p-4 border-b flex-shrink-0 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
+            <div className={`${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"} border-r transition-all duration-300 ${sidebarOpen ? "w-64" : "w-0"} overflow-hidden flex flex-col`}>
+                <div className={`p-4 border-b flex-shrink-0 ${darkMode ? "border-gray-700" : "border-gray-200"}`}>
                     <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center space-x-2">
                             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                                 <Code className="w-4 h-4 text-white" />
                             </div>
-                            <span className={`font-semibold ${darkMode ? 'text-white' : 'text-gray-900'}`}>HexaHub</span>
+                            <span className={`font-semibold ${darkMode ? "text-white" : "text-gray-900"}`}>HexaHub</span>
                         </div>
                         <button
                             onClick={() => setSidebarOpen(false)}
-                            className={`p-1 rounded ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                            className={`p-1 rounded ${darkMode ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}
                         >
                             <X className="w-4 h-4 cursor-pointer" />
                         </button>
                     </div>
-
-                    {/* User Profile */}
-                    <div className="relative mb-4">
-                        <div className={`flex items-center space-x-2 p-2 rounded-lg ${darkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                                RS
-                            </div>
-                            <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>Ritesh Sharma</span>
-                        </div>
-                    </div>
-
-
-
                 </div>
 
-                {/* Scrollable Content Area */}
-                <div className="flex-1 overflow-y-auto">
-                    {/* Pages List */}
-
-
-                    {/* Trash */}
-
-                </div>
-
-                {/* Sidebar Footer - Connected Users - Fixed at bottom */}
-                <div className={`border-t p-4 flex-shrink-0 ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
-                    <h3 className={`text-xs font-semibold uppercase tracking-wide mb-3 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>Connected Users</h3>
+                {/* Connected Users */}
+                <div className={`border-t p-4 flex-shrink-0 ${darkMode ? "border-gray-700" : "border-gray-200"}`}>
+                    <h3 className={`text-xs font-semibold uppercase tracking-wide mb-3 ${darkMode ? "text-gray-400" : "text-gray-500"}`}>
+                        Connected Users
+                    </h3>
                     <div className="space-y-2">
                         {connectedUsers.map((user) => (
                             <div key={user.id} className="flex items-center space-x-2">
@@ -185,10 +189,12 @@ function IDEApplication1() {
                                     <div className="w-6 h-6 bg-gray-400 rounded-full flex items-center justify-center text-white text-xs">
                                         {user.avatar}
                                     </div>
-                                    <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white rounded-full ${user.online ? 'bg-green-400' : 'bg-gray-400'
-                                        }`} />
+                                    <div
+                                        className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 border-2 border-white rounded-full ${user.online ? "bg-green-400" : "bg-gray-400"
+                                            }`}
+                                    />
                                 </div>
-                                <span className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{user.name}</span>
+                                <span className={`text-xs ${darkMode ? "text-gray-400" : "text-gray-600"}`}>{user.name}</span>
                             </div>
                         ))}
                     </div>
@@ -197,70 +203,74 @@ function IDEApplication1() {
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col">
-
-
-                {/* Top Navigation */}
-                <div className={`border-b px-4 py-3 flex-shrink-0 ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200'}`}>
+                {/* Topbar */}
+                <div className={`border-b px-4 py-3 flex-shrink-0 ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-4">
                             {!sidebarOpen && (
                                 <button
                                     onClick={() => setSidebarOpen(true)}
-                                    className={`p-2 rounded-lg ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                                    className={`p-2 rounded-lg ${darkMode ? "hover:bg-gray-700" : "hover:bg-gray-100"}`}
                                 >
                                     <Code className="w-5 h-5 cursor-pointer" />
                                 </button>
                             )}
 
-
-
                             {/* Language Selector */}
                             <div className="relative">
                                 <button
                                     onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
-                                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm cursor-pointer ${darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-100 hover:bg-gray-200'}`}
+                                    className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm cursor-pointer ${darkMode
+                                            ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                                            : "bg-gray-100 hover:bg-gray-200"
+                                        }`}
                                 >
                                     <Code className="w-4 h-4 cursor-pointer" />
-                                    <span>{languages.find(lang => lang.value === selectedLanguage)?.label}</span>
+                                    <span>{languages.find((lang) => lang.value === selectedLanguage)?.label}</span>
                                     <ChevronDown className="w-4 h-4 cursor-pointer" />
                                 </button>
 
                                 {showLanguageDropdown && (
-                                    <div className={`absolute top-full left-0 mt-1 border rounded-lg shadow-lg z-10 min-w-40 ${darkMode ? 'bg-gray-700 border-gray-600' : 'bg-white border-gray-200'}`}>
+                                    <div
+                                        className={`absolute top-full left-0 mt-1 border rounded-lg shadow-lg z-10 min-w-40 ${darkMode ? "bg-gray-700 border-gray-600" : "bg-white border-gray-200"
+                                            }`}
+                                    >
                                         {languages.map((lang) => (
                                             <button
                                                 key={lang.value}
-                                                onClick={() => handleLanguageChange(lang.value)} // ✅ Use function
-                                                className={`w-full cursor-pointer flex items-center space-x-2 px-4 py-2 text-left text-sm ${darkMode ? 'hover:bg-gray-600 text-gray-300' : 'hover:bg-gray-50'
+                                                onClick={() => handleLanguageChange(lang.value)}
+                                                className={`w-full cursor-pointer flex items-center space-x-2 px-4 py-2 text-left text-sm ${darkMode ? "hover:bg-gray-600 text-gray-300" : "hover:bg-gray-50"
                                                     }`}
                                             >
                                                 <lang.icon className="w-4 h-4" />
                                                 <span>{lang.label}</span>
                                             </button>
                                         ))}
-
                                     </div>
                                 )}
                             </div>
                         </div>
 
+                        {/* Run & Terminal */}
                         <div className="flex items-center space-x-2">
                             <button
                                 onClick={runCode}
                                 disabled={isRunning}
-                                className={` cursor-pointer flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium ${isRunning
-                                    ? 'bg-gray-400 cursor-not-allowed text-white'
-                                    : 'bg-green-600 hover:bg-green-700 text-white'
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium ${isRunning
+                                        ? "bg-gray-400 cursor-not-allowed text-white"
+                                        : "bg-green-600 hover:bg-green-700 text-white"
                                     }`}
                             >
                                 <Play className="w-4 h-4" />
-                                <span>{isRunning ? 'Running...' : 'Run Code'}</span>
+                                <span>{isRunning ? "Running..." : "Run Code"}</span>
                             </button>
                             <button
                                 onClick={() => setShowTerminal(!showTerminal)}
-                                className={`cursor-pointer flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium ${showTerminal
-                                    ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                                    : (darkMode ? 'bg-gray-700 hover:bg-gray-600 text-gray-300' : 'bg-gray-200 hover:bg-gray-300 text-gray-700')
+                                className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium ${showTerminal
+                                        ? "bg-orange-600 hover:bg-orange-700 text-white"
+                                        : darkMode
+                                            ? "bg-gray-700 hover:bg-gray-600 text-gray-300"
+                                            : "bg-gray-200 hover:bg-gray-300 text-gray-700"
                                     }`}
                             >
                                 <Square className="w-4 h-4" />
@@ -274,8 +284,6 @@ function IDEApplication1() {
                                 <Share className="w-4 h-4" />
                                 <span>Publish</span>
                             </button>
-
-
                             <div className="relative">
                                 <button
                                     onClick={() => setShowMainActions(!showMainActions)}
@@ -352,69 +360,70 @@ function IDEApplication1() {
                     </div>
                 </div>
 
-                {/* Code Editor Area */}
-                {/* Main Body (Editor + Terminal stacked like VS Code) */}
+                {/* Code Editor */}
                 <div className="flex-1 p-4 overflow-hidden">
-    
                     <Editor
-                        currentPage={currentPage || undefined}
+                        currentPage={currentPage}
                         updatePageContent={updatePageContent}
                         darkMode={darkMode}
                     />
                 </div>
 
-                    {/* Terminal slides up from bottom */}
-                    {showTerminal && (
-                        <div className={`border-t ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"} h-1/2 flex flex-col`}>
-                            {/* Terminal Header */}
-                            <div className={`flex items-center justify-between px-4 py-2 border-b ${darkMode ? "border-gray-700" : "border-gray-200"}`}>
-                                <div className="flex space-x-1">
-                                    <button
-                                        onClick={() => setTerminalTab("output")}
-                                        className={`px-3 py-1 text-sm  cursor-pointer rounded ${terminalTab === "output"
-                                            ? (darkMode ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-900")
-                                            : (darkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900")
-                                            }`}
-                                    >
-                                        Output
-                                    </button>
-                                    <button
-                                        onClick={() => setTerminalTab("errors")}
-                                        className={`px-3 py-1 cursor-pointer text-sm rounded ${terminalTab === "errors"
-                                            ? (darkMode ? "bg-gray-700 text-white" : "bg-gray-200 text-gray-900")
-                                            : (darkMode ? "text-gray-400 hover:text-white" : "text-gray-600 hover:text-gray-900")
-                                            }`}
-                                    >
-                                        Errors
-                                    </button>
-                                </div>
+                {/* Terminal */}
+                {showTerminal && (
+                    <div className={`border-t ${darkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"} h-1/2 flex flex-col`}>
+                        <div className={`flex items-center justify-between px-4 py-2 border-b ${darkMode ? "border-gray-700" : "border-gray-200"}`}>
+                            <div className="flex space-x-1">
                                 <button
-                                    onClick={() => setShowTerminal(false)}
-                                    className={`p-1 rounded cursor-pointer ${darkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-gray-200 text-gray-600"}`}
+                                    onClick={() => setTerminalTab("output")}
+                                    className={`px-3 py-1 text-sm cursor-pointer rounded ${terminalTab === "output"
+                                            ? darkMode
+                                                ? "bg-gray-700 text-white"
+                                                : "bg-gray-200 text-gray-900"
+                                            : darkMode
+                                                ? "text-gray-400 hover:text-white"
+                                                : "text-gray-600 hover:text-gray-900"
+                                        }`}
                                 >
-                                    <X className="w-4 h-4 cursor-pointer" />
+                                    Output
+                                </button>
+                                <button
+                                    onClick={() => setTerminalTab("errors")}
+                                    className={`px-3 py-1 cursor-pointer text-sm rounded ${terminalTab === "errors"
+                                            ? darkMode
+                                                ? "bg-gray-700 text-white"
+                                                : "bg-gray-200 text-gray-900"
+                                            : darkMode
+                                                ? "text-gray-400 hover:text-white"
+                                                : "text-gray-600 hover:text-gray-900"
+                                        }`}
+                                >
+                                    Errors
                                 </button>
                             </div>
-
-                            {/* Terminal Output */}
-                            <div className="flex-1 p-4 font-mono text-sm  overflow-y-auto">
-                                {terminalTab === "output" && (
-                                    <div className={`${darkMode ? "text-gray-300" : "text-gray-700"} whitespace-pre-wrap`}>
-                                        {terminalOutput}
-                                    </div>
-                                )}
-                                {terminalTab === "errors" && (
-                                    <div className={`${darkMode ? "text-red-400" : "text-red-600"}`}>
-                                        {terminalErrors}
-                                    </div>
-                                )}
-                            </div>
+                            <button
+                                onClick={() => setShowTerminal(false)}
+                                className={`p-1 rounded cursor-pointer ${darkMode ? "hover:bg-gray-700 text-gray-400" : "hover:bg-gray-200 text-gray-600"
+                                    }`}
+                            >
+                                <X className="w-4 h-4 cursor-pointer" />
+                            </button>
                         </div>
-                    )}
-                
 
-
-
+                        <div className="flex-1 p-4 font-mono text-sm overflow-y-auto">
+                            {terminalTab === "output" && (
+                                <div className={`${darkMode ? "text-gray-300" : "text-gray-700"} whitespace-pre-wrap`}>
+                                    {terminalOutput}
+                                </div>
+                            )}
+                            {terminalTab === "errors" && (
+                                <div className={`${darkMode ? "text-red-400" : "text-red-600"}`}>
+                                    {terminalErrors}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
 
                 {/* Terminal Footer Button */}
                 {!showTerminal && (
@@ -428,7 +437,6 @@ function IDEApplication1() {
                         </button>
                     </div>
                 )}
-                
             </div>
         </div>
     );

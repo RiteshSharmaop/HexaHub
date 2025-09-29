@@ -11,10 +11,7 @@ interface EditorProps {
 
 const Editor: React.FC<EditorProps> = ({ currentPage, updatePageContent, darkMode }) => {
 
-  useEffect(()=>{
-    console.log("currentPage : " , currentPage);
-    
-  }, [currentPage])
+ 
 
   if (!currentPage) {
     return (
