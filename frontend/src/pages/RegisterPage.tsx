@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import  { useState, useEffect } from "react";
 import axios from "axios";
 import { Sun, Moon } from "lucide-react";
 import { useNavigate } from "react-router-dom"; // assuming you use react-router
@@ -16,6 +16,8 @@ const RegisterPage = () => {
 
   // Apply dark/light mode globally
   useEffect(() => {
+    console.log(roomId);
+    
     if (darkMode) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
   }, [darkMode]);

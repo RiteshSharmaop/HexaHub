@@ -1,7 +1,6 @@
 import { Code } from "lucide-react";
 import CodeEditor from "./CodeEditor";
 import type { Page } from "../../constants/types";
-import { useEffect } from "react";
 
 interface EditorProps {
   currentPage: Page | undefined;
