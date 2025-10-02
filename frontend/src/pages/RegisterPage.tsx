@@ -47,7 +47,7 @@ const RegisterPage = () => {
     }
 
     try {
-      const res = await axios.post("http://localhost:8000/register-create", { username, email });
+      const res = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/register-create`, { username, email });
 
       if (res.status === 200) {
         const roomId = res.data.roomId;
@@ -80,7 +80,7 @@ const RegisterPage = () => {
     }
 
     try {
-      const res = await axios.post("http://localhost:8000/register-join", { username, email, roomId: joinId });
+      const res = await axios.post(`${import.meta.env.VITE_BACKEND_URL}/register-join`, { username, email, roomId: joinId });
 
       if (res.status === 200) {
         setRoomId(res.data.roomId);
