@@ -57,7 +57,7 @@ const io = new Server(httpServer, {
 });
 
 // Connect to Redis
-import { client } from "./db/redis.ts";
+import { client } from "./db/redis.js";
 
 
 
