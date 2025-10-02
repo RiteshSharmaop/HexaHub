@@ -3,7 +3,7 @@ import { languages } from "../constants/language";
 import { connectedUsers } from "../constants/user";
 import { CODE_SNIPPETS } from "../constants/language";
 import {
-    Trash2, User, Users, Play, Share, MoreHorizontal,
+    Trash2, User, Play, Share, MoreHorizontal,
     ChevronDown, Code, X, Sun, Moon, Square
 } from "lucide-react";
 import Editor from "../components/Editor/Editor";

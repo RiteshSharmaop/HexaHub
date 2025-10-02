@@ -23,7 +23,7 @@ client.on("error", (err) => console.error("❌ Redis Client Error", err));
 
     await client.set("foo", "bar");
     const result = await client.get("foo");
-    console.log("Redis get foo =>", result);
+    // console.log("Redis get foo =>", result);
   } catch (err) {
     console.error("Redis Connection Failed:", err);
   }
