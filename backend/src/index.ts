@@ -18,7 +18,7 @@ app.use(cors({ origin: "*", methods: ["GET", "POST"], credentials: true }));
 
 // Redis client
 
-import { client } from "./db/redis.ts";
+import { client } from "./db/redis.js";
 
 
 
