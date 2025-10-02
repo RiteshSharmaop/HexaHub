@@ -41,7 +41,11 @@
 
 import { createServer } from "http";
 import { Server } from "socket.io";
-import { createClient } from "redis";
+import dotenv from "dotenv";
+dotenv.config();
+
+
+
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
@@ -53,47 +57,86 @@ const io = new Server(httpServer, {
 });
 
 // Connect to Redis
-const redisClient = createClient();
+import { client } from "./db/redis.ts";
 
-redisClient.on("error", (err) => console.log("Redis Client Error", err));
 
-(async () => {
-  await redisClient.connect();
-  console.log("Connected to Redis");
-})();
+
+
+
 
 io.on("connection", (socket) => {
   console.log("Socket Connected:", socket.id);
 
-  // Join a room
-  socket.on("join-room", async (roomId: string) => {
-    socket.join(roomId);
-    console.log(`User ${socket.id} joined Room ${roomId}`);
+  socket.on("join-room", async (data) => {
+    const { roomId, userId } = data;
+    if (!roomId || !userId) {
+      console.error("join-room missing data", data);
+      return;
+    }
 
-    // Fetch last code from Redis
-    const lastCode = (await redisClient.get(roomId)) || "";
+    socket.join(roomId);
+    console.log(`User ${userId} rejoined room ${roomId}`);
+
+    // Fetch last code from Redis using the same key as Express
+    const lastCode = (await client.get(`HexaHub:Editor:${roomId}`)) || "";
     socket.emit("editor-sync", { code: lastCode });
   });
 
-  // Listen for editor changes
+  // Save editor changes
   socket.on("editor-change", async (data: { roomId: string; content: string }) => {
     const { roomId, content } = data;
+    if (!roomId || content === undefined) return;
 
-    // Save latest code to Redis
-    await redisClient.set(roomId, content);
-
-    // Broadcast to other users in the room
+    await client.set(`HexaHub:Editor:${roomId}`, content);
     socket.to(roomId).emit("editor-change", { roomId, content });
   });
 
-  socket.on("change-lang" ,(data: { roomId: string; language: string })=>{
-    console.log("Socket : chaning languafge " , data);
-    
-    const {roomId , language} = data;
-    socket.to(roomId).emit("changing-language" , {language});
+
+  socket.on("change-lang", (data: { roomId: string; language: string }) => {
+    console.log("Socket : chaning languafge ", data);
+
+    const { roomId, language } = data;
+    socket.to(roomId).emit("changing-language", { language });
   })
+  
+  
+  
+   // Listen for run-code
+  // socket.on("run-code", async ({ roomId, language, content, userId }) => {
+  //   try {
+  //     const result = await runTheCode(language, content);
+
+  //     const output = result.stdout || "";
+  //     const errors = result.stderr || "";
+
+  //     // Broadcast output to all users in the room
+  //     io.to(roomId).emit("run-code-output", {
+  //       output,
+  //       errors,
+  //       userId,
+  //     });
+  //   } catch (err: any) {
+  //     io.to(roomId).emit("run-code-output", {
+  //       output: "",
+  //       errors: err.message || "Error running code",
+  //       userId,
+  //     });
+  //   }
+  // });
+
+  // Forward run event to all users in the room
+    socket.on("run-code", ({ roomId, language, content, userId }) => {
+      socket.to(roomId).emit("run-code", { language, content, userId });
+    });
+
+
+    // ✅ Handle cursor changes
+  socket.on("cursor-change", (data: { roomId: string; position: any; userId: string; username: string }) => {
+    socket.to(data.roomId).emit("cursor-change", data);
+  });
 
   socket.on("disconnect", () => {
+
     console.log("User disconnected:", socket.id);
   });
 });

@@ -10,6 +10,9 @@ import Editor from "../components/Editor/Editor";
 import { runTheCode } from "../healper/healper";
 import socket from "../healper/socket";
 import { useRoom } from "../context/RoomContext";
+import CollaborateButton from "../components/Buttons/CollaborateButton";
+import { useNavigate } from "react-router-dom";
+import { useSocket } from "../context/SocketContext";
 
 function IDEApplication1() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -26,10 +29,6 @@ function IDEApplication1() {
     const [terminalOutput, setTerminalOutput] = useState('Welcome to HexaHub Terminal\n$ ');
     const [terminalErrors, setTerminalErrors] = useState('No errors detected.');
     const [isRunning, setIsRunning] = useState(false);
-
-
-    const { roomId } = useRoom();
-
     const [currentPage, setCurrentPage] = useState<{
         id: number;
         name: string;
@@ -41,6 +40,22 @@ function IDEApplication1() {
         language: "javascript",
         content: CODE_SNIPPETS["javascript"],
     });
+//     const [showBox, setShowBox] = useState(false);
+//     const [copied, setCopied] = useState(false);
+
+//     const shareLink = "https://yourapp.com/room/68da76fd-0c8c-8326-af49-24f7dc286a37";
+//      const copyToClipboard = () => {
+//     navigator.clipboard.writeText(shareLink);
+//     setCopied(true);
+//     setTimeout(() => setCopied(false), 2000);
+//   };
+
+    const { roomId } = useRoom();
+
+    const {socketId , setSocketId} = useSocket();
+
+    const navigate = useNavigate()
+
 
     // Helper → map language to filename
     const getFileName = (lang: string) => {
@@ -53,6 +68,36 @@ function IDEApplication1() {
             default: return "main.cpp";
         }
     };
+
+
+    useEffect(()=>{
+        
+    },[])
+
+
+    useEffect(()=>{
+    
+        
+        if(!socket.id ){
+            navigate("/" , {  });
+        }
+        setSocketId(socket.id);
+        console.log("Socket Id " , socketId );
+        
+    },[])
+    
+    
+    useEffect(() => {
+        if (!socket.connected) {
+            socket.on("connect", () => {
+                setSocketId(socket.id);
+                console.log("Socket connected with ID:", socket.id);
+            });
+        } else {
+            setSocketId(socket.id);
+        }
+    }, []);
+
 
     // Join room and sync last code
     useEffect(() => {
@@ -73,6 +118,9 @@ function IDEApplication1() {
             socket.off("editor-sync", syncHandler);
         };
     }, [roomId]);
+
+    
+
 
     // Listen for language changes
     useEffect(() => {
@@ -95,6 +143,15 @@ function IDEApplication1() {
             socket.off("changing-language", langHandler);
         };
     }, []);
+
+
+    const handleLogout = ()=>{
+        setShowUserDropdown(false);
+        localStorage.removeItem("email")
+        localStorage.removeItem("username")
+        localStorage.removeItem("roomId")
+        navigate("/")
+    }
 
     // Handle local language change
     const handleLanguageChange = (langValue: string) => {
@@ -124,6 +181,23 @@ function IDEApplication1() {
         }));
     };
 
+
+    useEffect(() => {
+        const outputHandler = (data: { output: string; errors: string; userId: string }) => {
+            setTerminalOutput(data.output || "");
+            setTerminalErrors(data.errors || "No errors detected.");
+            setTerminalTab(data.errors ? "errors" : "output");
+            setIsRunning(false);
+            setShowTerminal(true);
+        };
+
+        socket.on("run-code-output", outputHandler);
+
+        return () => {
+            socket.off("run-code-output", outputHandler);
+        };
+    }, []);
+
     // Run code in terminal
     const runCode = async () => {
         if (!currentPage) return;
@@ -131,6 +205,16 @@ function IDEApplication1() {
         setIsRunning(true);
         setShowTerminal(true);
 
+        
+        // Broadcast run event to all room members
+        if (roomId) {
+            socket.emit("run-code", {
+                roomId,
+                language: currentPage.language,
+                content: currentPage.content,
+                userId: socketId
+            });
+        }
         try {
             const res = await runTheCode(currentPage.language, currentPage.content);
 
@@ -141,7 +225,7 @@ function IDEApplication1() {
                 setTimeout(() => setTerminalTab("output"), 2000);
                 return;
             }
-
+            
             setTerminalOutput(res.output);
             setTerminalErrors("No errors detected.");
             setTerminalTab("output");
@@ -153,6 +237,40 @@ function IDEApplication1() {
             setIsRunning(false);
         }
     };
+    useEffect(() : any => {
+        const runHandler = async (data: { language: string; content: string; userId: string }) => {
+            // Skip if it was this user's own request
+            if (data.userId === socketId) return;
+
+            setIsRunning(true);
+            setShowTerminal(true);
+
+            try {
+                const res = await runTheCode(data.language, data.content);
+
+                if (res.stderr) {
+                    setTerminalOutput(res.stderr);
+                    setTerminalErrors(`ERROR: ${res.stderr}`);
+                    setTerminalTab("errors");
+                    return;
+                }
+
+                setTerminalOutput(res.output);
+                setTerminalErrors("No errors detected.");
+                setTerminalTab("output");
+            } catch (err: any) {
+                setTerminalOutput(`${err.message || err}`);
+                setTerminalErrors(`ERROR: ${err.message || err}`);
+                setTerminalTab("errors");
+            } finally {
+                setIsRunning(false);
+            }
+        };
+
+        socket.on("run-code", runHandler);
+        return () => socket.off("run-code", runHandler);
+    }, [socketId]);
+
 
     const toggleTheme = () => setDarkMode(!darkMode);
 
@@ -276,10 +394,11 @@ function IDEApplication1() {
                                 <Square className="w-4 h-4" />
                                 <span>Terminal</span>
                             </button>
-                            <button className="flex cursor-pointer items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
+                            {/* <button className="flex cursor-pointer items-center space-x-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm">
                                 <Users className="w-4 h-4" />
                                 <span>Collaborate</span>
-                            </button>
+                            </button> */}
+                            <CollaborateButton />
                             <button className="flex cursor-pointer items-center space-x-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">
                                 <Share className="w-4 h-4" />
                                 <span>Publish</span>
@@ -348,10 +467,10 @@ function IDEApplication1() {
                                             Preferences
                                         </button>
                                         <button
-                                            onClick={() => setShowUserDropdown(false)}
+                                            onClick={handleLogout}
                                             className={`w-full px-4 py-2 text-left text-sm text-red-600 ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-50'}`}
                                         >
-                                            Sign Out
+                                            Log Out
                                         </button>
                                     </div>
                                 )}

@@ -1,6 +1,12 @@
+
+
+
 import express from "express";
 import cors from "cors";
-import { createClient } from "redis";
+
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const PORT = 8000;
 const app = express();
@@ -8,12 +14,20 @@ const app = express();
 app.use(express.json());
 app.use(cors({ origin: "*", methods: ["GET", "POST"], credentials: true }));
 
-// Redis client
-const client = createClient();
-client.on("error", (err) => console.error("Redis Error:", err));
 
-await client.connect();
-console.log("Redis Connected ✅");
+
+// Redis client
+
+import { client } from "./db/redis.ts";
+
+
+
+
+
+
+
+
+
 
 
 // Helper to generate a unique 6-digit room ID
@@ -41,13 +55,19 @@ app.post("/register-create", async (req, res) => {
   const roomId = await generateRoomId();
 
   // Store room in Redis with 1-day expiry
-  await client.setEx(`HexaHub:Room:${roomId}`, 86400, JSON.stringify({ createdBy: email }));
+  await client.setEx(
+    `HexaHub:Room:${roomId}`,
+    86400,
+    JSON.stringify({ createdBy: email })
+  );
 
   // Store user in that room (Set so multiple users can join)
   await client.sAdd(`HexaHub:Room:${roomId}:users`, `${email} , ${username}`);
   await client.expire(`HexaHub:Room:${roomId}:users`, 86400);
 
-  return res.status(200).json({ message: "Room created", roomId, username, email });
+  return res
+    .status(200)
+    .json({ message: "Room created", roomId, username, email });
 });
 
 // Join Room
@@ -55,12 +75,16 @@ app.post("/register-join", async (req, res) => {
   const { username, email, roomId } = req.body;
 
   if (!username || !email || !roomId) {
-    return res.status(400).json({ error: "Username, email, and roomId are required" });
+    return res
+      .status(400)
+      .json({ error: "Username, email, and roomId are required" });
   }
 
   const roomExists = await client.exists(`HexaHub:Room:${roomId}`);
   if (!roomExists) {
-    return res.status(404).json({ error: `Room ${roomId} not found or expired` });
+    return res
+      .status(404)
+      .json({ error: `Room ${roomId} not found or expired` });
   }
 
   const editor = await client.get(`HexaHub:Editor:${roomId}`);
@@ -68,7 +92,13 @@ app.post("/register-join", async (req, res) => {
   // Add user to room
   await client.sAdd(`HexaHub:Room:${roomId}:users`, `${email} , ${username}`);
 
-  return res.status(200).json({ message: "Joined room successfully", roomId, username, email  , editor});
+  return res.status(200).json({
+    message: "Joined room successfully",
+    roomId,
+    username,
+    email,
+    editor,
+  });
 });
 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
