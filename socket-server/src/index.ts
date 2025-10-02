@@ -6,9 +6,10 @@ dotenv.config();
 import { client } from "./db/redis.js";
 
 const httpServer = createServer();
+
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
+    origin: "https://hexahub-mern.onrender.com", // frontend URL
     methods: ["GET", "POST"],
     credentials: true,
   },

@@ -14,7 +14,7 @@ const app = express();
 app.use(express.json());
 app.use(cors(
   {
-    origin: process.env.FRONTEND_URI || " http://localhost:5173/", 
+    origin: "https://hexahub-mern.onrender.com" , 
     methods: ["GET", "POST"], 
     credentials: true 
   }));

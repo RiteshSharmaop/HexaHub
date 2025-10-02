@@ -1,10 +1,10 @@
 import { io } from "socket.io-client";
 
-// Get the backend URL from environment variables
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
 const socket = io(SOCKET_URL, {
-  autoConnect: true,   // reconnect automatically
+  transports: ["websocket", "polling"], // ensures both WebSocket and polling work
+  autoConnect: true,
   reconnection: true,
   reconnectionAttempts: 10,
   reconnectionDelay: 1000,
